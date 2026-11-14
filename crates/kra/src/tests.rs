@@ -386,6 +386,19 @@ fn an_archive_declaring_too_many_entries_is_refused_before_it_is_indexed() {
     );
 }
 
+/// Every entry read is charged to one document-wide total: each pixel file may be
+/// [`MAX_LAYER_FILE`] on its own, but a document of many of them still has one budget.
+#[test]
+fn layer_files_are_charged_to_one_document_wide_total() {
+    let doc = maindoc("RGBA", "");
+    let bytes = zip_of(&[("mimetype", MIMETYPE), ("maindoc.xml", doc.as_bytes()), ("img/a", &[1; 100]), ("img/b", &[2; 100])], false);
+    // Room for `maindoc.xml` and one pixel file, not two.
+    let mut a = Archive::open_with_total(&bytes, doc.len() as u64 + 120).unwrap();
+    assert_eq!(a.entry("img/a", MAX_LAYER_FILE).unwrap().unwrap(), vec![1; 100]);
+    let err = a.entry("img/b", MAX_LAYER_FILE).unwrap_err();
+    assert!(matches!(&err, Error::Invalid(m) if m.contains("img/b") && m.contains("may expand to")), "{err:?}");
+}
+
 /// Two entries of one name: `zip` keeps one, and which one the writer meant is not known.
 #[test]
 fn two_entries_of_one_name_are_refused() {
