@@ -11,6 +11,7 @@
 use std::io::Write as _;
 
 pub mod model;
+pub mod paths;
 mod version;
 pub use version::Version;
 
@@ -506,6 +507,12 @@ impl<'a> Cur<'a> {
 
 const HEX_DIGITS: &[u8; 16] = b"0123456789ABCDEF";
 
+/// Room for `more` tags, with an allocation that can fail: a binary file of empty strings (3 bytes a
+/// tag) can ask for many gigabytes, and a refusal must be an error, not an abort.
+fn reserve_tags(tags: &mut Vec<Tag>, more: usize) -> Result<()> {
+    tags.try_reserve(more).map_err(|_| DxfError::OutOfMemory { tags: tags.len().saturating_add(more) })
+}
+
 /// Binary DXF, the body after the sentinel: R13+ (2-byte group codes) or R12 and earlier (1-byte
 /// group codes, where 255 is followed by a 2-byte code).
 ///
@@ -574,6 +581,7 @@ fn parse_binary_pass(b: &[u8], max_tags: usize, text: &mut codepage::BinaryText)
             }
         };
         let eof = code == 0 && matches!(&v, Value::Str(s) if s.trim_end() == "EOF");
+        reserve_tags(&mut tags, 1)?;
         tags.push(Tag { code, value: v });
         if tags.len() > max_tags {
             return Err(DxfError::TooLarge { tags: tags.len(), limit: max_tags });
@@ -761,7 +769,7 @@ fn ascii(tags: &[Tag], strings: Strings) -> Vec<u8> {
 /// Write tags as binary DXF (DXF Reference, "Binary DXF Files", R13+ layout): the sentinel,
 /// then per tag a 2-byte little-endian group code and the value in the binary form of the code's
 /// [`Kind`]: a zero-terminated string, an 8-byte real, a 2-, 4- or 8-byte integer, a 1-byte
-/// boolean, or a binary chunk (one length byte, then up to 255 bytes; longer data is split into
+/// boolean, or a binary chunk (one length byte, then up to 127 bytes; longer data is split into
 /// several groups of the same code). Strings are UTF-8 when `utf8` (R2007+), otherwise escaped as
 /// in [`write_ascii`]. A tag's value is converted to its code's kind, so a number written as text
 /// is stored as a number; a code outside the 16-bit range is skipped.
@@ -815,8 +823,8 @@ fn binary(tags: &[Tag], strings: Strings) -> Vec<u8> {
             }
             Kind::Hex => {
                 let bytes = hex_bytes(&t.value.as_str());
-                // An empty chunk is still one group, as in ASCII.
-                let mut chunks: Vec<&[u8]> = bytes.chunks(255).collect();
+                // At most 127 bytes per group, as in ASCII; an empty chunk is still one group.
+                let mut chunks: Vec<&[u8]> = bytes.chunks(127).collect();
                 if chunks.is_empty() {
                     chunks.push(&[]);
                 }
@@ -1325,6 +1333,22 @@ mod limit_tests {
         assert_eq!(max_tags_from(Some(" 400_000_000 ")), 400_000_000);
         // Issue #1948: the default must admit a DXF rendition well above 50 million group codes.
         const { assert!(MAX_TAGS >= 100_000_000) };
+    }
+
+    #[test]
+    fn a_refused_reservation_of_binary_tags_is_an_error() {
+        let mut tags = Vec::new();
+        reserve_tags(&mut tags, 1).unwrap();
+        let e = reserve_tags(&mut tags, usize::MAX).unwrap_err();
+        assert!(matches!(e, DxfError::OutOfMemory { tags: usize::MAX }), "{e}");
+        // Ordinary binary files still read: two tags (code 0 "SECTION", code 0 "EOF").
+        let mut b = Vec::new();
+        for text in ["SECTION", "EOF"] {
+            b.extend_from_slice(&0i16.to_le_bytes());
+            b.extend_from_slice(text.as_bytes());
+            b.push(0);
+        }
+        assert_eq!(parse_binary(&b).unwrap().len(), 2);
     }
 
     #[test]
