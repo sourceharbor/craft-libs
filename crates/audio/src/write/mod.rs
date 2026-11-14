@@ -8,10 +8,10 @@ pub(crate) mod flac;
 mod pcm;
 #[cfg(feature = "pcm-encode")]
 mod raw;
-#[cfg(feature = "pcm-encode")]
-mod wav;
 #[cfg(feature = "vorbis-encode")]
 pub(crate) mod vorbis;
+#[cfg(feature = "pcm-encode")]
+mod wav;
 #[cfg(feature = "vorbis-encode")]
 pub use vorbis::OGG_BITRATES;
 

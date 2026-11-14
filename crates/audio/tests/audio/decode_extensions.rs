@@ -67,6 +67,6 @@ fn every_encode_format_has_an_extension_it_is_written_and_read_under() {
         assert!(DECODE_EXTENSIONS.contains(&ext), "{ext}: what is written reads back");
         assert!(format.mime_type().starts_with("audio/"), "{format:?}");
     }
-    assert_eq!(EncodeFormat::ALL.iter().map(|f| f.extension()).collect::<Vec<_>>(), ["wav", "aif", "flac"]);
+    assert_eq!(EncodeFormat::ALL.iter().map(|f| f.extension()).collect::<Vec<_>>(), ["wav", "aif", "flac", "ogg"]);
     assert_eq!(EncodeFormat::Aiff.mime_type(), "audio/aiff");
 }

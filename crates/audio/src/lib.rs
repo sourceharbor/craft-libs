@@ -57,9 +57,9 @@ mod wav;
 #[cfg(any(feature = "pcm-encode", feature = "flac-encode", feature = "vorbis-encode"))]
 mod write;
 #[cfg(feature = "vorbis-encode")]
-pub use write::encode_ogg;
-#[cfg(feature = "vorbis-encode")]
 pub use write::OGG_BITRATES;
+#[cfg(feature = "vorbis-encode")]
+pub use write::encode_ogg;
 
 /// The FLAC packet encoder (RFC 9639), for a caller that muxes FLAC itself (into MP4, Matroska or
 /// its own `.flac` writer): planar integer samples in, frames out, and the STREAMINFO to patch in

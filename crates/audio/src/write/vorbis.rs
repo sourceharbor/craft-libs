@@ -45,10 +45,14 @@ pub fn encode(buf: &AudioBuffer, kbps: u32) -> Result<Vec<u8>> {
     };
 
     // The library is C: whatever it does wrong ends here as an error, never as a crash of the app.
-    let attempt = |strategy| std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| encode(strategy))).unwrap_or_else(|_| Err(AudioError::Encode("the Vorbis encoder failed".into())));
+    let attempt = |strategy| {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| encode(strategy)))
+            .unwrap_or_else(|_| Err(AudioError::Encode("the Vorbis encoder failed".into())))
+    };
     match attempt(vorbis_rs::VorbisBitrateManagementStrategy::Vbr { target_bitrate: target }) {
         Ok(bytes) => Ok(bytes),
-        Err(_) => attempt(vorbis_rs::VorbisBitrateManagementStrategy::QualityVbr { target_quality: 0.6 }).map_err(|e| AudioError::Encode(format!("the Vorbis encoder refused the audio: {e}"))),
+        Err(_) => attempt(vorbis_rs::VorbisBitrateManagementStrategy::QualityVbr { target_quality: 0.6 })
+            .map_err(|e| AudioError::Encode(format!("the Vorbis encoder refused the audio: {e}"))),
     }
 }
 
